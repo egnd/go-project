@@ -1,0 +1,123 @@
+stages:
+  - images
+  - checklist
+  - build
+  - release
+
+include:
+  - /build/ci/gitlab/jobs.yml
+  - /build/ci/gitlab/images.yml
+
+############################################################################## images
+
+# jobs from build/ci/gitlab/images.yml
+
+############################################################################## checklist
+
+gitflow:
+  extends: .lightweight-job
+  stage: checklist
+  script:
+    - git remote update
+    - if ! git log --pretty=format:"%H" | grep $(git log --pretty=format:"%H" -n 1 origin/master); then exit 1; fi
+  except:
+    - master
+    - tags
+    - schedules
+
+conflicts:
+  extends: .lightweight-job
+  stage: checklist
+  script:
+    - if grep -rni '^<<<\<<<< '; then exit 1; fi
+    - if grep -rni '^===\====$'; then exit 1; fi
+    - if grep -rni '^>>>\>>>> '; then exit 1; fi
+  except:
+    - schedules
+    - tags
+
+todos:
+  extends: .lightweight-job
+  stage: checklist
+  script:
+    - if grep -rni '@to\do:'; then exit 1; fi
+  allow_failure: true
+  except:
+    - schedules
+    - tags
+
+unit-tests:
+  extends: .base-image
+  image: ${CI_REGISTRY_IMAGE}/golang:env
+  stage: checklist
+  coverage: '/total:\s+\(statements\)\s+\d+.\d+%/'
+  script:
+    - make test
+    - go tool cover -func=coverage.out
+  artifacts:
+    name: ${CI_COMMIT_REF_NAME}-coverage
+    expire_in: 1 day
+    when: on_success
+    paths:
+      - coverage.html
+  except:
+    - schedules
+    - tags
+
+linters:
+  extends: .base-image
+  image: ${CI_REGISTRY_IMAGE}/golang:env
+  stage: checklist
+  script:
+    - make lint
+  except:
+    - schedules
+    - tags
+
+############################################################################## build
+
+golang:env:
+  stage: build
+  extends: .build-commit-job
+  script:
+    - docker pull ${CI_REGISTRY_IMAGE}/${CI_JOB_NAME} || echo "no ${CI_REGISTRY_IMAGE}/${CI_JOB_NAME} image"
+    - docker build --tag=${CI_REGISTRY_IMAGE}/${CI_JOB_NAME} --target=env
+      --build-arg BASE_IMG=${CI_REGISTRY_IMAGE}/golang:1.15-alpine
+      --cache-from=${CI_REGISTRY_IMAGE}/${CI_JOB_NAME} .
+    - docker images
+    - docker push ${CI_REGISTRY_IMAGE}/${CI_JOB_NAME}
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "master"'
+      changes:
+        - Dockerfile
+
+app:amd64:
+  extends: .build-commit-job
+  stage: build
+  variables:
+    ARCH_TYPE: amd64
+  cache:
+    key: vendor_dir
+    when: on_success
+    paths:
+      - vendor
+  except:
+    - tags
+    - schedules
+
+app:tag-amd64:
+  extends: .build-tag-job
+  stage: build
+  variables:
+    ARCH_TYPE: amd64
+  only:
+    - tags
+
+############################################################################## release
+
+package:
+  extends: .release-job
+  stage: release
+  only:
+    - tags
