@@ -8,57 +8,6 @@
     - apk add -q git grep
   retry: 0
 
-.dind-job:
-  extends: .base-image
-  variables:
-    DOCKER_DRIVER: overlay2
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-  before_script:
-    - docker login ${CI_REGISTRY} -u gitlab-ci-token -p ${CI_JOB_TOKEN}
-
-.save-img-job:
-  extends: .dind-job
-  image: docker:20
-  services:
-    - name: docker:20-dind
-      alias: docker
-  script:
-    - docker pull ${CI_JOB_NAME}
-    - docker tag ${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}/${CI_JOB_NAME}
-    - docker images
-    - docker push ${CI_REGISTRY_IMAGE}/${CI_JOB_NAME}
-
-.build-commit-job:
-  extends: .dind-job
-  image: ${CI_REGISTRY_IMAGE}/docker:20
-  services:
-    - name: ${CI_REGISTRY_IMAGE}/docker:20-dind
-      alias: docker
-  variables:
-    ARCH_TYPE: ""
-  script:
-    - docker pull ${CI_REGISTRY_IMAGE}/golang:env
-    - docker build --tag=${CI_REGISTRY_IMAGE}/app:z-${CI_COMMIT_SHORT_SHA}-${ARCH_TYPE} --target=${ARCH_TYPE}
-      --build-arg BASE_IMG=${CI_REGISTRY_IMAGE}/golang:1.15-alpine
-      --build-arg APP_BUILD_VERSION=${CI_COMMIT_REF_NAME}
-      --cache-from=${CI_REGISTRY_IMAGE}/golang:env .
-    - docker images
-    - docker push ${CI_REGISTRY_IMAGE}/app:z-${CI_COMMIT_SHORT_SHA}-${ARCH_TYPE}
-    - if [ "${CI_COMMIT_REF_NAME}" = "master" ]; then 
-        docker tag ${CI_REGISTRY_IMAGE}/app:z-${CI_COMMIT_SHORT_SHA}-${ARCH_TYPE} ${CI_REGISTRY_IMAGE}/app:latest-${ARCH_TYPE};
-        docker push ${CI_REGISTRY_IMAGE}/app:latest-${ARCH_TYPE};
-      fi
-
-.build-tag-job:
-  extends: .build-commit-job
-  variables:
-    ARCH_TYPE: ""
-  script:
-    - docker pull ${CI_REGISTRY_IMAGE}/app:z-${CI_COMMIT_SHORT_SHA}-${ARCH_TYPE}
-    - docker tag ${CI_REGISTRY_IMAGE}/app:z-${CI_COMMIT_SHORT_SHA}-${ARCH_TYPE} ${CI_REGISTRY_IMAGE}/app:${CI_COMMIT_REF_NAME}-${ARCH_TYPE}
-    - docker push ${CI_REGISTRY_IMAGE}/app:${CI_COMMIT_REF_NAME}-${ARCH_TYPE}
-
 .release-job:
   extends: .base-image
   retry: 0
@@ -70,3 +19,61 @@
     - make release BUILD_VERSION="${BUILD_VERSION}" REGISTRY_IMAGE_PREFIX="${CI_REGISTRY_IMAGE}"
     - build/ci/gitlab/package.publish.sh "${BUILD_VERSION}"
     - build/ci/gitlab/package.release.sh "${BUILD_VERSION}"
+
+.dind-job:
+  extends: .base-image
+  variables:
+    DOCKER_DRIVER: overlay2
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - docker login ${CI_REGISTRY} -u gitlab-ci-token -p ${CI_JOB_TOKEN}
+
+.save-img-job:
+  extends: .dind-job
+  variables:
+    DOCKER_VERSION: 20
+  image: docker:${DOCKER_VERSION}
+  services:
+    - name: docker:${DOCKER_VERSION}-dind
+      alias: docker
+  script:
+    - docker pull ${CI_JOB_NAME}
+    - docker tag ${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}/${CI_JOB_NAME}
+    - docker images
+    - docker push ${CI_REGISTRY_IMAGE}/${CI_JOB_NAME}
+
+.build-commit-image-job:
+  extends: .dind-job
+  variables:
+    DOCKER_VERSION: 20
+    ARCH_TYPE: ""
+    BASE_IMG: ${CI_REGISTRY_IMAGE}/golang:1.15-alpine
+    ENV_IMG: ${CI_REGISTRY_IMAGE}/golang:1.15-alpine-env
+  image: ${CI_REGISTRY_IMAGE}/docker:${DOCKER_VERSION}
+  services:
+    - name: ${CI_REGISTRY_IMAGE}/docker:${DOCKER_VERSION}-dind
+      alias: docker
+  script:
+    - docker pull ${CI_REGISTRY_IMAGE}/${ENV_IMG}
+    - docker build --tag=${CI_REGISTRY_IMAGE}/app:z-${CI_COMMIT_SHORT_SHA}-${ARCH_TYPE} --target=${ARCH_TYPE}
+      --build-arg BASE_IMG=${BASE_IMG}
+      --build-arg APP_BUILD_VERSION=${CI_COMMIT_REF_NAME}
+      --cache-from=${CI_REGISTRY_IMAGE}/${ENV_IMG} .
+    - docker images
+    - docker push ${CI_REGISTRY_IMAGE}/app:z-${CI_COMMIT_SHORT_SHA}-${ARCH_TYPE}
+    - if [ "${CI_COMMIT_REF_NAME}" = "master" ]; then 
+        docker tag ${CI_REGISTRY_IMAGE}/app:z-${CI_COMMIT_SHORT_SHA}-${ARCH_TYPE} ${CI_REGISTRY_IMAGE}/app:latest-${ARCH_TYPE};
+        docker push ${CI_REGISTRY_IMAGE}/app:latest-${ARCH_TYPE};
+      fi
+
+.build-tag-image-job:
+  extends: .build-commit-image-job
+  script:
+    - docker pull ${CI_REGISTRY_IMAGE}/app:z-${CI_COMMIT_SHORT_SHA}-${ARCH_TYPE}
+    - docker tag ${CI_REGISTRY_IMAGE}/app:z-${CI_COMMIT_SHORT_SHA}-${ARCH_TYPE} ${CI_REGISTRY_IMAGE}/app:${CI_COMMIT_REF_NAME}-${ARCH_TYPE}
+    - docker push ${CI_REGISTRY_IMAGE}/app:${CI_COMMIT_REF_NAME}-${ARCH_TYPE}
+
+# .build-commit-job: @TODO:
+
+# .build-tag-job: @TODO:
