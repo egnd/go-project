@@ -52,3 +52,4 @@ golang:1.15-alpine:
       changes:
         - build/ci/gitlab/images.yml
         - Dockerfile
+
