@@ -12,7 +12,7 @@ docker:20:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_TAG =~ "/^$/"'
       changes:
-        - build/ci/gitlab/images-jobs.yml
+        - build/ci/gitlab/images.yml
         - build/docker.Dockerfile
 
 docker:20-dind:
@@ -22,7 +22,7 @@ docker:20-dind:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_TAG =~ "/^$/"'
       changes:
-        - build/ci/gitlab/images-jobs.yml
+        - build/ci/gitlab/images.yml
 
 alpine:3.12:
   extends: .save-img-job
@@ -31,13 +31,21 @@ alpine:3.12:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_TAG =~ "/^$/"'
       changes:
-        - build/ci/gitlab/images-jobs.yml
+        - build/ci/gitlab/images.yml
 
 golang:1.15-alpine:
   extends: .save-img-job
   stage: images
+  after_script:
+    - docker pull ${CI_REGISTRY_IMAGE}/golang:env || echo "no ${CI_REGISTRY_IMAGE}/golang:env image"
+    - docker build --tag=${CI_REGISTRY_IMAGE}/golang:env --target=env
+      --build-arg BASE_IMG=${CI_REGISTRY_IMAGE}/${CI_JOB_NAME}
+      --cache-from=${CI_REGISTRY_IMAGE}/golang:env .
+    - docker images
+    - docker push ${CI_REGISTRY_IMAGE}/golang:env
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_TAG =~ "/^$/"'
       changes:
-        - build/ci/gitlab/images-jobs.yml
+        - build/ci/gitlab/images.yml
+        - Dockerfile
