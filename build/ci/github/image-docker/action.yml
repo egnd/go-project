@@ -1,0 +1,13 @@
+name: save docker image
+description: save docker image
+runs:
+  using: "composite"
+  steps:
+    - run: docker pull docker.pkg.github.com/egnd/go-project/docker:20 || echo "no image"
+      shell: bash
+    - run: docker build --tag=docker.pkg.github.com/egnd/go-project/docker:20 --file build/docker.Dockerfile --build-arg BASE_IMG=docker:20 --cache-from=docker.pkg.github.com/egnd/go-project/docker:20 .
+      shell: bash
+    - run: docker images
+      shell: bash
+    - run: docker push docker.pkg.github.com/egnd/go-project/docker:20
+      shell: bash

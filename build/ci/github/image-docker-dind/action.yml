@@ -1,0 +1,13 @@
+name: save docker image dind
+description: save docker image dind
+runs:
+  using: "composite"
+  steps:
+    - run: docker pull docker:20-dind
+      shell: bash
+    - run: docker tag docker:20-dind docker.pkg.github.com/egnd/go-project/docker:20-dind
+      shell: bash
+    - run: docker images
+      shell: bash
+    - run: docker push docker.pkg.github.com/egnd/go-project/docker:20-dind
+      shell: bash

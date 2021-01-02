@@ -1,0 +1,129 @@
+name: branch commit
+
+# Run this workflow every time a new commit pushed to your repository
+on: 
+  push: 
+    branches:
+     - '*'
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: azure/docker-login@v1
+        with:
+          login-server: docker.pkg.github.com
+          username: $GITHUB_ACTOR
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v2
+      - uses: build/ci/github/image-docker@v1
+  docker-dind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: azure/docker-login@v1
+        with:
+          login-server: docker.pkg.github.com
+          username: $GITHUB_ACTOR
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: build/ci/github/image-docker-dind@v1          
+  alpine:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Docker Login
+        uses: azure/docker-login@v1
+        with:
+          login-server: docker.pkg.github.com
+          username: $GITHUB_ACTOR
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Save image
+        run: |
+          docker pull alpine:3.12
+          docker tag alpine:3.12 docker.pkg.github.com/egnd/go-project/alpine:3.12
+          docker images
+          docker push docker.pkg.github.com/egnd/go-project/alpine:3.12
+  golang:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Docker Login
+        uses: azure/docker-login@v1
+        with:
+          login-server: docker.pkg.github.com
+          username: $GITHUB_ACTOR
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # - uses: actions/checkout@v2
+      # - name: Save image
+      #   run: |
+      #     docker pull golang:1.15-alpine
+      #     docker tag golang:1.15-alpine docker.pkg.github.com/egnd/go-project/golang:1.15-alpine
+      #     docker pull docker.pkg.github.com/egnd/go-project/golang:1.15-alpine-env || echo "no image"
+      #     docker build --tag=docker.pkg.github.com/egnd/go-project/golang:1.15-alpine-env --target=env --build-arg BASE_IMG=golang:1.15-alpine --cache-from=docker.pkg.github.com/egnd/go-project/golang:1.15-alpine-env .
+      #     docker images
+      #     docker push docker.pkg.github.com/egnd/go-project/golang:1.15-alpine
+      #     docker push docker.pkg.github.com/egnd/go-project/golang:1.15-alpine-env
+
+
+  todos:
+    runs-on: ubuntu-latest
+    container: 
+      image: docker.pkg.github.com/egnd/go-project/alpine:3.12
+      credentials:
+        username: $GITHUB_ACTOR
+        password: ${{ secrets.GITHUB_TOKEN}}
+    continue-on-error: true
+    needs: [alpine, docker, docker-dind, golang]
+    steps:
+      - name: Install job utils
+        run: apk add -q git grep
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Find TODO's
+        run: if grep -rni '@to\do:'; then exit 1; fi
+  conflicts:
+    runs-on: ubuntu-latest
+    container: 
+      image: docker.pkg.github.com/egnd/go-project/alpine:3.12
+      credentials:
+        username: $GITHUB_ACTOR
+        password: ${{ secrets.GITHUB_TOKEN}}
+    needs: [alpine, docker, docker-dind, golang]
+    steps:
+      - name: Install job utils
+        run: apk add -q git grep
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Find git conflicts
+        run: |
+          if grep -rni '^<<<\<<<< '; then exit 1; fi
+          if grep -rni '^===\====$'; then exit 1; fi
+          if grep -rni '^>>>\>>>> '; then exit 1; fi
+  gitflow:
+    runs-on: ubuntu-latest
+    container: 
+      image: docker.pkg.github.com/egnd/go-project/alpine:3.12
+      credentials:
+        username: $GITHUB_ACTOR
+        password: ${{ secrets.GITHUB_TOKEN}}
+    if: "!contains(github.ref, 'master')"
+    needs: [alpine, docker, docker-dind, golang]
+    steps:
+      - name: Install job utils
+        run: apk add -q git grep
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Check latest master
+        run: |
+          git remote update
+          git branch -a
+          git log --pretty=format:'%H' -n 1 origin/master
+          if ! git log --pretty=format:'%H' | grep $(git log --pretty=format:'%H' -n 1 origin/master); then exit 1; fi
+
+  test-job:
+    runs-on: ubuntu-latest
+    container: 
+      image: docker.pkg.github.com/egnd/go-project/alpine:3.12
+      credentials:
+        username: $GITHUB_ACTOR
+        password: ${{ secrets.GITHUB_TOKEN}}
+    needs: [todos, conflicts, gitflow]
+    steps:
+      - run: echo "123"
