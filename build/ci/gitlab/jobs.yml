@@ -1,13 +1,6 @@
 .base-image:
   retry: 1
 
-.lightweight-job:
-  extends: .base-image
-  image: ${CI_REGISTRY_IMAGE}/alpine:3.12
-  before_script:
-    - apk add -q git grep make
-  retry: 0
-
 .release-job:
   extends: .base-image
   retry: 0
