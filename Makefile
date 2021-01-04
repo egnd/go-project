@@ -44,6 +44,7 @@ docker-lint:
 test: mocks ## Test source code
 	go test -mod=readonly -cover -covermode=count -coverprofile=coverage.out $(PACKAGES)
 	go tool cover -html=coverage.out -o coverage.html
+	go tool cover -func=coverage.out
 
 docker-test:
 	docker run --rm -t --volume $$(pwd):/src:rw $(DC_APP_ENV_IMAGE) make test
@@ -68,6 +69,24 @@ docker-vendor:
 owner: ## Reset folder owner
 	sudo chown -R $$(id -u):$$(id -u) ./
 	@echo "Success"
+
+check-conflicts: ## Find git conflicts
+	@if grep -rn '^<<<\<<<< ' .; then exit 1; fi
+	@if grep -rn '^===\====$$' .; then exit 1; fi
+	@if grep -rn '^>>>\>>>> ' .; then exit 1; fi
+	@echo "All is OK"
+
+check-todos: ## Find TODO's
+	@if grep -rn '@TO\DO:' .; then exit 1; fi
+	@echo "All is OK"
+
+check-master: ## Check for latest master in current branch
+	@git remote update
+	@if ! git log --pretty=format:'%H' | grep $$(git log --pretty=format:'%H' -n 1 origin/master) > /dev/null; then exit 1; fi
+	@echo "All is OK"
+
+codecov: mocks
+	CGO_ENABLED=1 go test -race -coverprofile=coverage.txt -covermode=atomic ./pkg/...
 
 release: ## Create release archive
 	zip -9 -roTj release-$(BUILD_VERSION).zip README.md
