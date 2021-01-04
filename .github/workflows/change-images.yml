@@ -15,6 +15,6 @@ jobs:
       - run: echo "${{ secrets.ghcr_token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - uses: actions/checkout@v2
       - run: docker pull $REGISTRY_PREFIX/$IMG_GOLANG || echo "no image"
-      - run: docker build --tag=$REGISTRY_PREFIX/$IMG_GOLANG --build-arg BASE_IMG=$IMG_GOLANG --cache-from=$REGISTRY_PREFIX/$IMG_GOLANG --file=build/golang.Dockerfile build
+      - run: docker build --tag=$REGISTRY_PREFIX/$IMG_GOLANG --build-arg BASE_IMG=$IMG_GOLANG --cache-from=$REGISTRY_PREFIX/$IMG_GOLANG --target=env .
       - run: docker images
       - run: docker push $REGISTRY_PREFIX/$IMG_GOLANG
