@@ -17,8 +17,8 @@ output:
 linters:
   enable-all: true
   fast: false
-  # disable:
-  #   - goerr113
+  disable:
+    - goerr113 # @TODO:
 issues:
   exclude-use-default: false
   max-issues-per-linter: 0

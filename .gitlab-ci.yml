@@ -16,8 +16,7 @@ gitflow:
   extends: .lightweight-job
   stage: checklist
   script:
-    - git remote update
-    - if ! git log --pretty=format:"%H" | grep $(git log --pretty=format:"%H" -n 1 origin/master); then exit 1; fi
+    - make check-master
   except:
     - master
     - tags
@@ -27,9 +26,7 @@ conflicts:
   extends: .lightweight-job
   stage: checklist
   script:
-    - if grep -rni '^<<<\<<<< '; then exit 1; fi
-    - if grep -rni '^===\====$'; then exit 1; fi
-    - if grep -rni '^>>>\>>>> '; then exit 1; fi
+    - make check-conflicts
   except:
     - schedules
     - tags
@@ -38,7 +35,7 @@ todos:
   extends: .lightweight-job
   stage: checklist
   script:
-    - if grep -rni '@to\do:'; then exit 1; fi
+    - make check-todos
   allow_failure: true
   except:
     - schedules
@@ -51,7 +48,6 @@ unit-tests:
   coverage: '/total:\s+\(statements\)\s+\d+.\d+%/'
   script:
     - make test
-    - go tool cover -func=coverage.out
   artifacts:
     name: ${CI_COMMIT_REF_NAME}-coverage
     expire_in: 1 day
